@@ -6,7 +6,7 @@
 
 `speaker` is a Codex skill project for academic presentations. It reads a real `.pptx`, combines text extraction, PPTX structure inspection, slide rendering, OCR, and vision review, then generates grounded speaker notes and injects the clean script into PowerPoint's speaker notes pane.
 
-> Current skill package: `speaker-v6.skill`  
+> Current skill package: `speaker-v7.skill`  
 > Internal skill name: `ppt-speech-writer`
 
 ## What It Solves
@@ -76,7 +76,14 @@ ppt-speech-writer/
     ├── write_display_docx.py
     └── inject_notes.py
 
-speaker-v6.skill
+speaker-v7.skill
+```
+
+Claude Code compatibility:
+
+```text
+.claude/skills/ppt-speech-writer -> ../../ppt-speech-writer
+CLAUDE.md
 ```
 
 ## Installation
@@ -84,10 +91,18 @@ speaker-v6.skill
 Download or use the packaged skill:
 
 ```text
-speaker-v6.skill
+speaker-v7.skill
 ```
 
 Install it using your Codex client's skill import flow. Once installed, use it when you need speaker notes, presenter notes, a speech script, or narration for a real `.pptx` file.
+
+For Claude Code, this repository includes a project skill at `.claude/skills/ppt-speech-writer`. Open Claude Code from the repository root and invoke:
+
+```text
+/ppt-speech-writer
+```
+
+If Claude Code is already running, use `/reload-skills` after pulling updates.
 
 ## Example Prompt
 
@@ -109,6 +124,8 @@ The skill will:
 8. Generate the complete display document.
 9. Inject clean notes into the `.pptx`.
 10. Keep intermediate evidence files inside `work/`.
+
+Before writing notes, the skill must explicitly confirm the output language. It does not infer the note language from the language you use in chat.
 
 ## Outputs
 
@@ -219,6 +236,15 @@ flowchart LR
 | Display version | Slide labels, separators, transitions, pauses, emphasis marks, glossary, timing table | Rehearsal and review |
 | Clean version | Spoken text only | Injected into PowerPoint speaker notes |
 
+## Language And Style Rules
+
+- The output language must be confirmed before drafting.
+- The full deliverable must use one language consistently.
+- Canonical technical terms may remain in English, but sentence grammar must follow the selected language.
+- Slide notes must not start with template phrases such as "This slide shows..." or "On this slide...".
+- Chinese notes must not start with phrases such as "这一页展示了..." or "在这一页中..."。
+- Each slide should open with the actual claim, finding, method role, or argument step.
+
 ## Dependencies
 
 Useful dependencies:
@@ -249,7 +275,7 @@ The skill improves reliability through script-based discovery, rendering, OCR, v
 After modifying the source folder, rebuild the `.skill` package:
 
 ```bash
-zip -r speaker-v7.skill ppt-speech-writer -x '*/__pycache__/*'
+zip -r speaker-v8.skill ppt-speech-writer -x '*/__pycache__/*'
 ```
 
 The `.skill` file is a fixed package. Editing `ppt-speech-writer/` does not automatically update an already packaged or installed skill.

@@ -6,7 +6,7 @@
 
 `speaker` 是一个面向学术汇报的 Codex skill 项目：读取真实 `.pptx`，结合文本抽取、PPTX 结构解析、逐页渲染、OCR 和视觉审查，生成逐页 speaker notes，并把干净版讲稿写入 PowerPoint 备注区。
 
-> 当前安装包：`speaker-v6.skill`  
+> 当前安装包：`speaker-v7.skill`  
 > 内部 skill 名称：`ppt-speech-writer`
 
 ## 它解决什么问题
@@ -76,7 +76,14 @@ ppt-speech-writer/
     ├── write_display_docx.py
     └── inject_notes.py
 
-speaker-v6.skill
+speaker-v7.skill
+```
+
+Claude Code 兼容入口：
+
+```text
+.claude/skills/ppt-speech-writer -> ../../ppt-speech-writer
+CLAUDE.md
 ```
 
 ## 安装
@@ -84,10 +91,24 @@ speaker-v6.skill
 下载或使用仓库中的：
 
 ```text
-speaker-v6.skill
+speaker-v7.skill
 ```
 
 然后按你的 Codex 客户端或运行环境的 skill 导入方式安装。安装后，当你要求为真实 `.pptx` 写 speaker notes、presenter notes、speech script 或 narration 时，这个 skill 会被用于处理该任务。
+
+如果使用 Claude Code，本仓库已经包含项目级 skill：
+
+```text
+.claude/skills/ppt-speech-writer
+```
+
+在仓库根目录打开 Claude Code 后，可以直接调用：
+
+```text
+/ppt-speech-writer
+```
+
+如果 Claude Code 已经在运行，更新后使用 `/reload-skills` 重新加载。
 
 ## 使用方式
 
@@ -110,6 +131,8 @@ skill 会按以下顺序工作：
 8. 生成完整 display 文档
 9. 把 clean notes 注入 `.pptx`
 10. 将中间证据文件统一收纳到 `work/` 文件夹
+
+写讲稿前，skill 必须先明确确认输出语言。它不会因为你用中文聊天，就自动把备注写成中文。
 
 ## 输出物
 
@@ -220,6 +243,15 @@ flowchart LR
 | Display version | slide label、分隔线、transition、pause、emphasis、术语表、timing table | 给演讲者排练和检查 |
 | Clean version | 只保留自然 spoken text | 写入 PPT notes pane |
 
+## 语言和表达规则
+
+- 写讲稿前必须先确认输出语言。
+- 整个交付物必须保持同一种语言。
+- 标准技术术语可以保留英文，但句子语法必须服从所选语言。
+- 英文备注不要以 "This slide shows..."、"On this slide..." 这类模板句开头。
+- 中文备注不要以“这一页展示了……”“在这一页中……”这类模板句开头。
+- 每页开头应直接给出该页的观点、发现、方法作用或论证步骤。
+
 ## 依赖
 
 必需或常用依赖：
@@ -250,7 +282,7 @@ flowchart LR
 修改源码目录后，需要重新打包：
 
 ```bash
-zip -r speaker-v6.skill ppt-speech-writer -x '*/__pycache__/*'
+zip -r speaker-v8.skill ppt-speech-writer -x '*/__pycache__/*'
 ```
 
 意义：`.skill` 是固定安装包。只修改 `ppt-speech-writer/` 源码不会自动更新已经打包或已经安装的 skill。发布到 GitHub 时，仓库名建议使用 `speaker`。

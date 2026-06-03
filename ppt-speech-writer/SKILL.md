@@ -19,6 +19,63 @@ Do not rely on text boxes alone. A slide is considered read only after these evi
 
 If a visible element cannot be interpreted reliably, say so and ask the user before writing notes for that slide. Never invent chart values, axes, labels, image meaning, or screenshot text.
 
+## Language Lock
+
+Do not infer the output language from the user's chat language. Before writing any notes, explicitly confirm exactly one output language:
+
+- English
+- Chinese
+- same as the deck language
+- another user-specified language
+
+Never draft speaker notes, display notes, glossary entries, timing-table labels, transitions, coverage notes, or injected clean notes until the output language is confirmed.
+
+Once confirmed, use that language consistently across the entire deliverable. Technical terms may remain in their canonical form, such as `PPO`, `AUROC`, `PowerPoint`, `SmartArt`, or dataset names, but sentence grammar, explanations, labels, table headers, and transitions must follow the selected language.
+
+If the selected language is English:
+
+- Write all prose, transitions, labels, glossary definitions, timing-table headers, and coverage notes in English.
+- If a slide contains Chinese or Japanese text, quote only the necessary original term and immediately explain it in English.
+- Do not write mixed sentences such as "This model 说明了 robustness."
+
+If the selected language is Chinese:
+
+- Write all prose, transitions, labels, glossary definitions, timing-table headers, and coverage notes in Chinese.
+- Keep standard technical names in English only when they are the canonical term.
+- Do not write mixed sentences such as "这个 model shows strong robustness."
+- Embed English technical terms naturally in Chinese syntax, for example: "`AUROC` 用来衡量模型区分正负样本的能力。"
+
+## Slide Prose Style
+
+Do not begin slide notes by describing the slide object. Begin with the claim, implication, finding, method role, or argument step.
+
+Banned English openings:
+
+- "This slide shows..."
+- "This slide presents..."
+- "This slide explains..."
+- "On this slide..."
+- "Here we can see..."
+- "The slide is about..."
+
+Banned Chinese openings:
+
+- "这一页展示了..."
+- "这一页说明了..."
+- "这一页主要讲..."
+- "在这一页中..."
+- "我们可以看到..."
+- "这页是关于..."
+
+Preferred pattern:
+
+- Weak: "This slide shows the optimization setup."
+- Strong: "The experiments use a fixed optimization protocol so later comparisons stay controlled."
+- Weak: "这一页展示了实验设置。"
+- Strong: "实验设置被固定下来，是为了保证后续结果比较具有可解释性。"
+
+Write speaker notes as a coherent oral argument, not as captions for slides. Each page should open with a content-level thesis sentence, then explain the visible evidence that supports it.
+
 ## Required Workflow
 
 ### 1. Create Output Layout
