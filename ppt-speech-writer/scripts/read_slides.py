@@ -172,6 +172,54 @@ def raw_slide_texts(deck_path: Path) -> dict[int, list[str]]:
     return out
 
 
+def is_visual_shape(shape: dict) -> bool:
+    kind = str(shape.get("kind", "")).upper()
+    return (
+        "PICTURE" in kind
+        or "MEDIA" in kind
+        or "CHART" in kind
+        or bool(shape.get("chart"))
+        or bool(shape.get("tables"))
+    )
+
+
+def compact_payload(data: dict) -> dict:
+    """Shrink the extract for context-limited downstream use.
+
+    Drops the full raw_ooxml_text dump (kept only as raw_ooxml_text_not_in_shapes)
+    and per-shape name/bbox for non-visual shapes. Bounding boxes are preserved for
+    visual shapes because region-scoped OCR needs picture geometry.
+    """
+    slides = []
+    for slide in data.get("slides", []):
+        shapes = []
+        for shape in slide.get("shapes", []):
+            compact = {"shape_index": shape.get("shape_index"), "kind": shape.get("kind")}
+            for key in ("text", "tables", "chart", "visual_note"):
+                if key in shape:
+                    compact[key] = shape[key]
+            if is_visual_shape(shape) and shape.get("bbox_emu"):
+                compact["bbox_emu"] = shape["bbox_emu"]
+            shapes.append(compact)
+        slides.append(
+            {
+                "slide": slide.get("slide"),
+                "title": slide.get("title", ""),
+                "shapes": shapes,
+                "raw_ooxml_text_not_in_shapes": slide.get("raw_ooxml_text_not_in_shapes", []),
+                "existing_notes": slide.get("existing_notes", ""),
+            }
+        )
+    return {
+        "deck": data.get("deck", ""),
+        "slide_count": data.get("slide_count", len(slides)),
+        "slide_width_emu": data.get("slide_width_emu"),
+        "slide_height_emu": data.get("slide_height_emu"),
+        "mode": "compact",
+        "slides": slides,
+    }
+
+
 def extract(deck_path: Path) -> dict:
     from pptx import Presentation
 
@@ -200,13 +248,26 @@ def extract(deck_path: Path) -> dict:
                 "existing_notes": extract_notes(slide),
             }
         )
-    return {"deck": str(deck_path), "slide_count": len(slides), "slides": slides}
+    return {
+        "deck": str(deck_path),
+        "slide_count": len(slides),
+        "slide_width_emu": int(prs.slide_width) if prs.slide_width else None,
+        "slide_height_emu": int(prs.slide_height) if prs.slide_height else None,
+        "mode": "full",
+        "slides": slides,
+    }
 
 
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description="Extract structured .pptx slide evidence.")
     parser.add_argument("deck", type=Path)
     parser.add_argument("--output", type=Path)
+    parser.add_argument(
+        "--mode",
+        choices=["full", "compact"],
+        default="full",
+        help="compact drops the redundant raw OOXML dump and non-visual geometry to shrink the JSON.",
+    )
     args = parser.parse_args(argv)
 
     if not args.deck.exists():
@@ -214,6 +275,8 @@ def main(argv: list[str]) -> int:
         return 1
     ensure_pptx()
     data = extract(args.deck)
+    if args.mode == "compact":
+        data = compact_payload(data)
     text = json.dumps(data, ensure_ascii=False, indent=2)
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)

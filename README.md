@@ -6,8 +6,20 @@
 
 `speaker` is a Codex skill project for academic presentations. It reads a real `.pptx`, combines text extraction, PPTX structure inspection, slide rendering, OCR, and vision review, then generates grounded speaker notes and injects the clean script into PowerPoint's speaker notes pane.
 
-> Current skill package: `speaker-v7.skill`  
+> Current skill package: `speaker-v8.skill`  
 > Internal skill name: `ppt-speech-writer`
+
+## What's New in v0.8
+
+This release focuses on tighter, evidence-grounded output and realistic speech pacing.
+
+- **Pause-aware pacing model.** Speech length is now budgeted with a deterministic model (English ~110 wpm, Chinese ~165 characters/min) that reserves time for slide transitions and `[PAUSE]` marks. This fixes the previous problem where a "15-minute" script ran to ~1,800 words and overran to ~30 minutes; a 15-minute talk now targets roughly 1,300–1,400 words. Both Chinese and English notes are tuned per slide.
+- **Per-slide word budget.** `SKILL.md` now computes and records a per-slide budget so each slide stays within the overall time target, and the timing table reports words/characters, budget, and pauses with a TOTAL row.
+- **Glossary toggle.** A new on/off switch (default on) can skip the "Key Parameters And Methods" glossary table end to end.
+- **Compact extraction (`read_slides.py --mode compact`).** Drops redundant raw OOXML dumps and non-visual geometry while keeping picture bounding boxes, producing much smaller intermediate JSON.
+- **Region-scoped OCR (`visual_inventory.py --ocr-scope image-regions`).** OCR runs only on picture/media regions (text boxes, tables, and charts already come from XML), with an automatic full-slide fallback. Includes robustness fixes: byte-safe OCR decoding and symlink path resolution.
+- **Compact vision-review packet (`vision_review.py --format compact`).** The shared review prompt and result schema are hoisted to the top level instead of being repeated per slide; Markdown is now optional.
+- **Concise final delivery.** The skill returns a summary plus file paths by default instead of pasting the full slide-by-slide script into chat. Reply `show notes` to print the complete notes.
 
 ## What It Solves
 
@@ -76,7 +88,7 @@ ppt-speech-writer/
     ├── write_display_docx.py
     └── inject_notes.py
 
-speaker-v7.skill
+speaker-v8.skill
 ```
 
 Claude Code compatibility:
@@ -91,7 +103,7 @@ CLAUDE.md
 Download or use the packaged skill:
 
 ```text
-speaker-v7.skill
+speaker-v8.skill
 ```
 
 Install it using your Codex client's skill import flow. Once installed, use it when you need speaker notes, presenter notes, a speech script, or narration for a real `.pptx` file.

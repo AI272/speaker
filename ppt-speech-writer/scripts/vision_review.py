@@ -30,6 +30,19 @@ Return:
 """
 
 
+RESULT_TEMPLATE = {
+    "layout_summary": "",
+    "visible_text_not_in_xml": [],
+    "charts_axes_legends_values": [],
+    "tables_and_key_cells": [],
+    "diagrams_smartart_arrows_flow": [],
+    "screenshots_or_images": [],
+    "decorative_or_low_priority_elements": [],
+    "uncertain_elements": [],
+    "coverage_requirements_for_speaker_notes": [],
+}
+
+
 def compact_elements(slide: dict) -> list[dict]:
     out = []
     for item in slide.get("structured_elements", []):
@@ -45,38 +58,33 @@ def compact_elements(slide: dict) -> list[dict]:
     return out
 
 
-def build_packet(inventory: dict) -> dict:
+def build_packet(inventory: dict, compact: bool = True) -> dict:
     slides = []
     for slide in inventory.get("slides", []):
-        slides.append(
-            {
-                "slide": slide.get("slide"),
-                "title": slide.get("title", ""),
-                "rendered_image": slide.get("rendered_image", ""),
-                "requires_vision_review": bool(slide.get("needs_direct_visual_inspection", False)),
-                "review_prompt": REVIEW_PROMPT,
-                "structured_evidence": compact_elements(slide),
-                "raw_ooxml_text_not_in_shapes": slide.get("raw_ooxml_text_not_in_shapes", []),
-                "ocr_text": slide.get("ocr_text", ""),
-                "review_result_template": {
-                    "layout_summary": "",
-                    "visible_text_not_in_xml": [],
-                    "charts_axes_legends_values": [],
-                    "tables_and_key_cells": [],
-                    "diagrams_smartart_arrows_flow": [],
-                    "screenshots_or_images": [],
-                    "decorative_or_low_priority_elements": [],
-                    "uncertain_elements": [],
-                    "coverage_requirements_for_speaker_notes": [],
-                },
-            }
-        )
-    return {
+        entry = {
+            "slide": slide.get("slide"),
+            "title": slide.get("title", ""),
+            "rendered_image": slide.get("rendered_image", ""),
+            "requires_vision_review": bool(slide.get("needs_direct_visual_inspection", False)),
+            "structured_evidence": compact_elements(slide),
+            "raw_ooxml_text_not_in_shapes": slide.get("raw_ooxml_text_not_in_shapes", []),
+            "ocr_text": slide.get("ocr_text", ""),
+        }
+        if slide.get("ocr_regions"):
+            entry["ocr_regions"] = slide["ocr_regions"]
+        if not compact:
+            entry["review_prompt"] = REVIEW_PROMPT
+            entry["review_result_template"] = dict(RESULT_TEMPLATE)
+        slides.append(entry)
+    packet = {
         "deck": inventory.get("deck", ""),
         "slide_count": inventory.get("slide_count", len(slides)),
-        "instruction": "Use a vision-capable reviewer to fill review_result_template for required slides.",
+        "instruction": "Use a vision-capable reviewer to fill review_result_schema for slides where requires_vision_review is true.",
+        "review_prompt": REVIEW_PROMPT,
+        "review_result_schema": dict(RESULT_TEMPLATE),
         "slides": slides,
     }
+    return packet
 
 
 def write_markdown(packet: dict, path: Path) -> None:
@@ -86,6 +94,10 @@ def write_markdown(packet: dict, path: Path) -> None:
         f"Deck: {packet.get('deck', '')}",
         f"Slide count: {packet.get('slide_count', '')}",
         "",
+        "## Review Prompt (applies to every slide below)",
+        "",
+        packet.get("review_prompt", REVIEW_PROMPT),
+        "",
     ]
     for slide in packet.get("slides", []):
         lines.extend(
@@ -94,10 +106,6 @@ def write_markdown(packet: dict, path: Path) -> None:
                 "",
                 f"Rendered image: {slide.get('rendered_image', '')}",
                 f"Requires vision review: {slide.get('requires_vision_review')}",
-                "",
-                "### Review Prompt",
-                "",
-                slide.get("review_prompt", ""),
                 "",
                 "### OCR Text",
                 "",
@@ -122,14 +130,20 @@ def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description="Create a vision-review packet from visual_inventory.json.")
     parser.add_argument("--inventory", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
-    parser.add_argument("--markdown", type=Path)
+    parser.add_argument("--markdown", type=Path, help="optional; the compact JSON packet is the primary output.")
+    parser.add_argument(
+        "--format",
+        choices=["compact", "full"],
+        default="compact",
+        help="compact hoists the shared review prompt/schema to the top level instead of repeating them per slide.",
+    )
     args = parser.parse_args(argv)
 
     if not args.inventory.exists():
         sys.stderr.write(f"Inventory not found: {args.inventory}\n")
         return 1
     inventory = json.loads(args.inventory.read_text(encoding="utf-8"))
-    packet = build_packet(inventory)
+    packet = build_packet(inventory, compact=args.format == "compact")
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(packet, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     if args.markdown:

@@ -76,6 +76,61 @@ Preferred pattern:
 
 Write speaker notes as a coherent oral argument, not as captions for slides. Each page should open with a content-level thesis sentence, then explain the visible evidence that supports it.
 
+## Timing And Pacing Model
+
+Speaker notes must fit the spoken duration when read aloud at a realistic pace, with pauses. Do not treat raw word count as speaking time. Plan against pause-adjusted rates, then verify the total against the clock.
+
+### Planning rates (pauses already absorbed)
+
+These rates already account for natural pauses, breaths, and emphasis. Use them as the default budget:
+
+| Output language | Planning rate | Notes |
+|-----------------|---------------|-------|
+| English | 110 words/min | Academic delivery. Range 100–130. Use 100 for dense or non-native delivery. |
+| Chinese | 165 字/min | Academic delivery. Range 150–180. Count Chinese characters, not words. |
+
+Calibration rule: if the speaker says a previous talk ran long, trust the measured pace over the default. Example: a 15-minute talk that actually took 30 minutes ran at `1800 ÷ 30 = 60` effective words per minute. When the speaker reports such a history, recompute with their real rate instead of the table default.
+
+### Reserve time before budgeting words
+
+Do not spend the whole clock on words. From the target duration, subtract:
+
+- Slide transitions: about 3 seconds per slide.
+- Deliberate `[PAUSE]` markers: about 1.5 seconds each.
+- A global safety buffer of 10–15% for audience reactions, demos, and overruns.
+
+Budget formula for a talk of `T` minutes across `N` slides:
+
+```text
+gross_seconds   = T * 60
+reserved        = 3 * N  +  1.5 * pause_count  +  0.12 * gross_seconds
+usable_seconds  = gross_seconds - reserved
+english_word_budget = usable_seconds / 60 * 110
+chinese_char_budget = usable_seconds / 60 * 165
+```
+
+Worked example — 15-minute English talk, 12 slides, ~24 planned pauses:
+
+```text
+gross_seconds  = 900
+reserved       = 36 (transitions) + 36 (pauses) + 108 (12% buffer) = 180
+usable_seconds = 720
+word_budget    = 720 / 60 * 110 ≈ 1,320 words
+```
+
+So a 15-minute English talk targets roughly 1,300–1,400 spoken words, not 1,800. The earlier 1,800-word draft was about a third over budget, which is exactly why it overran. Apply the same arithmetic with the Chinese rate for a Chinese talk.
+
+### Per-slide budget
+
+Distribute the total budget by content weight, not evenly. A title or section divider may take 30–50 words; a dense results slide may take 150–180. Record each slide's target in the timing table `budget` field and the actual count in `word_count`, and the number of `[PAUSE]` markers in `pauses`. If a slide's `word_count` exceeds its `budget`, compress the prose or recommend splitting the slide. Never let total `word_count` exceed the computed budget.
+
+### Writing to the budget in both languages
+
+- Keep spoken sentences short, under 20 words. 中文每句也尽量短，便于换气。
+- Place `[PAUSE]` after a thesis sentence or before a key number, not at random.
+- Do not pad to hit a budget. A slightly short talk is safer than an overrun.
+- Compute the Chinese and English drafts against their own language rate. Do not reuse the English word count as the Chinese character count; the same idea is usually fewer characters in Chinese than words in English.
+
 ## Required Workflow
 
 ### 1. Create Output Layout
@@ -89,7 +144,7 @@ Use this layout:
 ├── <deck-stem>-with-notes.pptx
 ├── <deck-stem>-display.docx
 ├── <deck-stem>-display.md              # only if python-docx is unavailable
-├── <deck-stem>-vision-review.md
+├── <deck-stem>-vision-review.md        # optional, only if the Markdown review is requested
 └── work/
     ├── slide_extract.json
     ├── visual_inventory.json
@@ -100,13 +155,13 @@ Use this layout:
     └── rendered_slides/
 ```
 
-Only surface the three user-facing deliverable types in the final response:
+In the final response, surface only the user-facing deliverables as a short summary plus their file paths:
 
 - PowerPoint with speaker notes
 - complete display rehearsal document
-- vision-review Markdown
+- vision-review packet, and the Markdown version only if it was generated
 
-All other files are supporting artifacts and must stay under `work/`.
+All other files are supporting artifacts and must stay under `work/`. Do not paste the full per-slide notes into chat by default.
 
 ### 2. Extract Structured Slide Content
 
@@ -114,8 +169,11 @@ Run:
 
 ```bash
 python scripts/read_slides.py "/path/to/deck.pptx" \
+  --mode compact \
   --output "<deck-stem>-speaker-output/work/slide_extract.json"
 ```
+
+Use `--mode compact` by default. It drops the redundant raw OOXML dump and non-visual geometry so the JSON stays small, while keeping picture bounding boxes that later steps need for region OCR. Use `--mode full` only when you must inspect the complete raw OOXML for a hard-to-read slide.
 
 This output includes:
 
@@ -146,21 +204,25 @@ python scripts/visual_inventory.py \
   --extract "<deck-stem>-speaker-output/work/slide_extract.json" \
   --rendered-dir "<deck-stem>-speaker-output/work/rendered_slides" \
   --output "<deck-stem>-speaker-output/work/visual_inventory.json" \
-  --ocr auto
+  --ocr auto \
+  --ocr-scope image-regions
 ```
+
+`--ocr-scope image-regions` OCRs only the picture and media crops on each slide, because text boxes, tables, and chart labels already come from the structured XML. This avoids re-OCRing clean vector text and keeps OCR noise out of the inventory. Each result is recorded per shape under `ocr_regions`, with the combined text in `ocr_text`. If Pillow is unavailable or a slide has no picture regions, the script falls back to a full-slide OCR and records the scope it actually used in `ocr_scope`. Use `--ocr-scope full` to force whole-slide OCR for an image-only slide that was not detected as a picture shape.
 
 Use OCR results as evidence, not as unquestioned truth. Correct obvious OCR errors only when the rendered screenshot makes the correction clear.
 
 ### 5. Run Vision Review
 
-Create a vision-review packet:
+Create a vision-review packet. The default output is a compact JSON packet: the review prompt and result schema are written once at the top level instead of being repeated on every slide, so the file stays small.
 
 ```bash
 python scripts/vision_review.py \
   --inventory "<deck-stem>-speaker-output/work/visual_inventory.json" \
-  --output "<deck-stem>-speaker-output/work/vision_review_packet.json" \
-  --markdown "<deck-stem>-speaker-output/<deck-stem>-vision-review.md"
+  --output "<deck-stem>-speaker-output/work/vision_review_packet.json"
 ```
+
+The compact JSON packet is the working artifact you fill in. Generate the long Markdown version only when the user wants a human-readable review document; if so, add `--markdown "<deck-stem>-speaker-output/<deck-stem>-vision-review.md"`.
 
 Then inspect the rendered PNGs with a vision-capable agent, browser screenshot inspection, or equivalent image-review tool. Do not skip this step when slides contain charts, tables, SmartArt, diagrams, screenshots, dense figures, or image-only content.
 
@@ -212,7 +274,10 @@ Ask only for missing context:
 - audience and prior knowledge
 - occasion
 - output language
+- glossary table: `on` or `off`, default `on`. When `off`, skip the Key Parameters And Methods table everywhere it appears.
 - output filename, defaulting to `<input>-with-notes.pptx`
+
+Once the speaking duration and output language are known, compute the word or character budget with the Timing And Pacing Model before drafting. State the total budget and the rough per-slide budget to the user so the talk is sized to the clock from the start. If the user has reported that past talks ran long, ask for their real pace and recompute with it.
 
 ### 9. Confirm Narrative Arc
 
@@ -258,10 +323,14 @@ Per-slide rules:
 - For image-only slides, describe only what the rendered slide supports.
 - Keep academic sentences clear and spoken. Prefer sentences under 20 words.
 - Avoid filler such as "as we can see", "let me show you", and "moving on".
+- Stay within the slide's word or character budget from the Timing And Pacing Model. If the evidence needs more, compress or recommend splitting the slide rather than overrunning.
+- Place `[PAUSE]` deliberately after a thesis or before a key number, and count each one toward the slide's reserved time.
 
 ### 11. Key Parameters And Methods
 
-After the display notes, include a table:
+Only build this table when the glossary toggle from step 8 is `on`. If it is `off`, skip this step, leave `key_parameters_methods` empty in the display document, and do not mention a glossary in the final summary.
+
+When glossary is `on`, include a table after the display notes:
 
 | Term | Type | Slide(s) | Definition |
 |------|------|----------|------------|
@@ -276,8 +345,8 @@ The display version must not remain only as chat text. Build a complete rehearsa
 - Deck Comprehension Brief
 - Narrative Arc
 - Slide-by-Slide Display Notes
-- Key Parameters And Methods table
-- Timing table
+- Key Parameters And Methods table, only when the glossary toggle is `on`
+- Timing table, with per-slide `budget` and `pauses` alongside the actual `word_count`
 - coverage notes and uncertain visual elements
 - injection log placeholder or final injection log
 
@@ -296,7 +365,7 @@ Create `<deck-stem>-speaker-output/work/display_document.json` with this shape:
     {"term": "...", "type": "Method", "slides": "1, 4", "definition": "..."}
   ],
   "timing": [
-    {"slide": 1, "title": "Title", "time": "0:45", "word_count": 110}
+    {"slide": 1, "title": "Title", "time": "0:45", "word_count": 110, "budget": 120, "pauses": 2}
   ],
   "coverage_notes": ["Slide 3 chart labels verified by rendered screenshot."],
   "injection_log": []
@@ -325,6 +394,8 @@ Before injection, verify:
 - every chart axis, legend, and important visible value is handled
 - every table header and important comparison is handled
 - no spoken claim exceeds the slide evidence
+- total spoken time, including pauses, transitions, and buffer, fits the target duration, and no slide exceeds its per-slide budget
+- the glossary table is present only when the toggle is `on`, and when present every key term has a definition
 - a complete display document was generated
 - only user-facing deliverables are at the output root; intermediate JSON and rendered images are under `work/`
 - clean notes have no labels, separators, pause markers, emphasis markers, or transition lines
@@ -363,13 +434,18 @@ After injection, update `<deck-stem>-speaker-output/work/display_document.json` 
 
 ### 15. Final Delivery
 
+The default chat response is a short summary plus file paths. Do not paste the full per-slide speaker notes into chat. The complete script already lives in the display document; pasting it again is redundant and buries the deliverables.
+
 Return:
 
-1. PowerPoint with speaker notes: `<deck-stem>-speaker-output/<deck-stem>-with-notes.pptx`
-2. Complete display rehearsal document: `<deck-stem>-speaker-output/<deck-stem>-display.docx` or `.md`
-3. Vision-review Markdown: `<deck-stem>-speaker-output/<deck-stem>-vision-review.md`
-4. Coverage notes for any uncertain visual element
-5. Mention that all intermediate evidence files are under `<deck-stem>-speaker-output/work/`
+1. A short summary: thesis in one line, slide count, output language, glossary on or off, and target duration versus estimated spoken time from the timing table. Flag any slide that overran its budget.
+2. File paths only:
+   - PowerPoint with speaker notes: `<deck-stem>-speaker-output/<deck-stem>-with-notes.pptx`
+   - Display rehearsal document: `<deck-stem>-speaker-output/<deck-stem>-display.docx` or `.md`
+   - Vision-review packet: `<deck-stem>-speaker-output/work/vision_review_packet.json`, plus the Markdown version only if it was generated
+3. Coverage notes for any uncertain visual element.
+4. Mention that all intermediate evidence files are under `<deck-stem>-speaker-output/work/`.
+5. Offer to paste the full per-slide script on request, for example: reply "show notes" and I will paste the complete script here.
 
 ## Dependency Guidance
 

@@ -6,8 +6,20 @@
 
 `speaker` 是一个面向学术汇报的 Codex skill 项目：读取真实 `.pptx`，结合文本抽取、PPTX 结构解析、逐页渲染、OCR 和视觉审查，生成逐页 speaker notes，并把干净版讲稿写入 PowerPoint 备注区。
 
-> 当前安装包：`speaker-v7.skill`  
+> 当前安装包：`speaker-v8.skill`  
 > 内部 skill 名称：`ppt-speech-writer`
+
+## v0.8 更新说明
+
+本次更新聚焦于更紧凑、更接地（grounded）的输出，以及更真实的演讲配速。
+
+- **带停顿的配速模型。** 现在用一个确定性模型来估算讲稿长度（英文约 110 词/分钟，中文约 165 字/分钟），并为翻页过渡和 `[PAUSE]` 停顿预留时间。这修复了之前“15 分钟讲稿生成了约 1800 词、却要半小时才念完”的问题；现在 15 分钟的演讲目标约为 1300–1400 词。中英文讲稿都按页做了优化。
+- **逐页字数预算。** `SKILL.md` 现在会计算并记录每页的字数预算，让每页都落在总时长目标内；timing 表也会给出词数/字数、预算和停顿数，并带 TOTAL 合计行。
+- **术语表开关。** 新增 on/off 开关（默认 on），可以全程跳过 “Key Parameters And Methods” 术语表。
+- **紧凑抽取（`read_slides.py --mode compact`）。** 丢弃冗余的原始 OOXML 转储和非视觉几何信息，同时保留图片 bounding box，显著减小中间 JSON 体积。
+- **按区域 OCR（`visual_inventory.py --ocr-scope image-regions`）。** OCR 现在只对图片/媒体区域运行（文本框、表格、图表已从 XML 获得），并在必要时自动回退到整页 OCR。同时修复了健壮性问题：OCR 字节安全解码、symlink 路径解析。
+- **紧凑视觉审查包（`vision_review.py --format compact`）。** 把共用的审查提示词和结果 schema 提到顶层，不再每页重复；Markdown 改为可选输出。
+- **精简的最终交付。** 现在默认只返回摘要 + 文件路径，而不是把逐页讲稿全部贴进对话。回复 `show notes` 即可打印完整逐页讲稿。
 
 ## 它解决什么问题
 
@@ -76,7 +88,7 @@ ppt-speech-writer/
     ├── write_display_docx.py
     └── inject_notes.py
 
-speaker-v7.skill
+speaker-v8.skill
 ```
 
 Claude Code 兼容入口：
@@ -91,7 +103,7 @@ CLAUDE.md
 下载或使用仓库中的：
 
 ```text
-speaker-v7.skill
+speaker-v8.skill
 ```
 
 然后按你的 Codex 客户端或运行环境的 skill 导入方式安装。安装后，当你要求为真实 `.pptx` 写 speaker notes、presenter notes、speech script 或 narration 时，这个 skill 会被用于处理该任务。

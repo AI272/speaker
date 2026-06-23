@@ -30,6 +30,66 @@ def markdown_table(headers: list[str], rows: list[list[str]]) -> list[str]:
     return lines
 
 
+TIMING_HEADERS = ["Slide", "Title", "Est. time", "Words/Chars", "Budget", "Pauses"]
+
+
+def _to_int(value) -> int | None:
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_time(value) -> int | None:
+    text = str(value or "").strip()
+    if not text or ":" not in text:
+        return None
+    parts = text.split(":")
+    try:
+        return int(parts[0]) * 60 + int(parts[1])
+    except ValueError:
+        return None
+
+
+def _fmt_time(seconds: int) -> str:
+    minutes, secs = divmod(int(seconds), 60)
+    return f"{minutes}:{secs:02d}"
+
+
+def timing_rows(items: list[dict]) -> tuple[list[list[str]], list[str]]:
+    """Build timing rows plus a TOTAL row summing counts, budgets, pauses, and time."""
+    rows: list[list[str]] = []
+    total_count = total_budget = total_pauses = total_seconds = 0
+    have_time = False
+    for item in items:
+        rows.append(
+            [
+                item.get("slide", ""),
+                item.get("title", ""),
+                item.get("time", ""),
+                item.get("word_count", ""),
+                item.get("budget", ""),
+                item.get("pauses", ""),
+            ]
+        )
+        total_count += _to_int(item.get("word_count")) or 0
+        total_budget += _to_int(item.get("budget")) or 0
+        total_pauses += _to_int(item.get("pauses")) or 0
+        seconds = _parse_time(item.get("time"))
+        if seconds is not None:
+            total_seconds += seconds
+            have_time = True
+    total_row = [
+        "TOTAL",
+        "",
+        _fmt_time(total_seconds) if have_time else "",
+        str(total_count) if total_count else "",
+        str(total_budget) if total_budget else "",
+        str(total_pauses) if total_pauses else "",
+    ]
+    return rows, total_row
+
+
 def write_markdown(data: dict, output: Path) -> Path:
     md_path = output.with_suffix(".md")
     md_path.parent.mkdir(parents=True, exist_ok=True)
@@ -69,11 +129,8 @@ def write_markdown(data: dict, output: Path) -> Path:
     lines.append("")
 
     lines.extend(["## Timing Table", ""])
-    timing_rows = [
-        [item.get("slide", ""), item.get("title", ""), item.get("time", ""), item.get("word_count", "")]
-        for item in data.get("timing", [])
-    ]
-    lines.extend(markdown_table(["Slide", "Title", "Time", "Word count"], timing_rows))
+    rows, total_row = timing_rows(data.get("timing", []))
+    lines.extend(markdown_table(TIMING_HEADERS, rows + [total_row]))
     lines.append("")
 
     lines.extend(["## Coverage Notes", ""])
@@ -128,15 +185,14 @@ def write_docx(data: dict, output: Path) -> Path:
         row[3].text = str(item.get("definition", ""))
 
     doc.add_heading("Timing Table", level=1)
-    timing = doc.add_table(rows=1, cols=4)
-    for idx, header in enumerate(["Slide", "Title", "Time", "Word count"]):
+    timing = doc.add_table(rows=1, cols=len(TIMING_HEADERS))
+    for idx, header in enumerate(TIMING_HEADERS):
         timing.rows[0].cells[idx].text = header
-    for item in data.get("timing", []):
-        row = timing.add_row().cells
-        row[0].text = str(item.get("slide", ""))
-        row[1].text = str(item.get("title", ""))
-        row[2].text = str(item.get("time", ""))
-        row[3].text = str(item.get("word_count", ""))
+    rows, total_row = timing_rows(data.get("timing", []))
+    for values in rows + [total_row]:
+        cells = timing.add_row().cells
+        for idx, value in enumerate(values):
+            cells[idx].text = str(value)
 
     doc.add_heading("Coverage Notes", level=1)
     for note in data.get("coverage_notes", []):
